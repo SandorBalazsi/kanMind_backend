@@ -13,6 +13,23 @@ class Board(models.Model):
     def __str__(self):
         return self.title
     
+    @property
+    def member_count(self):
+        return self.members.count()
+    
+    @property
+    def ticket_count(self):
+        return self.tasks.count()
+    
+    @property
+    def tasks_to_do_count(self):
+        return self.tasks.filter(status='to-do').count()
+    
+    @property
+    def tasks_high_prio_count(self):
+        return self.tasks.filter(priority='high').count()
+    
+    
 class Task(models.Model):
     STATUS_CHOICES = [
         ('to-do','To Do'),
@@ -34,12 +51,16 @@ class Task(models.Model):
     priority = models.CharField(max_length=10, choices=PRIORITY_CHOICES, default='medium')
     assignee = models.ForeignKey(Auth_User.User, on_delete=models.CASCADE,null=True,blank=True,related_name='assigned_tasks')
     reviewer = models.ForeignKey(Auth_User.User, on_delete=models.CASCADE,null=True,blank=True,related_name='review_tasks')
-    due_date = models.CharField(max_length=50)
+    due_date = models.DateField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     def __str__(self):
         return self.title
+    
+    @property
+    def comments_count(self):
+        return self.comments.count()
     
 
 class Comment(models.Model):
