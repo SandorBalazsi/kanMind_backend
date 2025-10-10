@@ -22,3 +22,48 @@ class BoardSerializer(serializers.ModelSerializer):
         read_only_fields = [
             'id', 'owner', 'created_at', 'updated_at'
         ]
+
+    def get_tasks(self, obj):
+        from boards_app.api.serializers import TaskSerializer
+        return TaskSerializer(obj.tasks.all(), many=True).data
+    
+    def create(self, validated_data):
+        member_ids = validated_data.pop('member_ids', [])
+        board = Board.objects.create(**validated_data)
+        if member_ids:
+            board.members.set(member_ids)
+        board.members.add(board.owner)
+        return board
+    
+    def update(self, instance, validated_data):
+        member_ids = validated_data.pop('member_ids', None)
+        instance = super().update(instance, validated_data)
+        if member_ids is not None:
+            instance.members.set(member_ids)
+            instance.members.add(instance.owner)
+        return instance
+    
+    
+class TaskSerializer(serializers.ModelSerializer):
+    assignee = UserSerializer(read_only=True)
+    reviewer = UserSerializer(read_only=True)
+    assignee_id = serializers.IntegerField(write_only=True, required=False, allow_null=True)
+    reviewer_id = serializers.IntegerField(write_only=True, required=False, allow_null=True)
+    
+    class Meta:
+        model = Task
+        fields = [
+            'id', 'board', 'title', 'description', 'status', 'priority',
+            'assignee', 'assignee_id', 'reviewer', 'reviewer_id',
+            'due_date', 'comments_count', 'created_at', 'updated_at'
+        ]
+        read_only_fields = ['id', 'created_at', 'updated_at']
+
+
+class CommentSerializer(serializers.ModelSerializer):
+    author = serializers.CharField(source='author.fullname', read_only=True)
+    
+    class Meta:
+        model = Comment
+        fields = ['id', 'task', 'author', 'content', 'created_at']
+        read_only_fields = ['id', 'task', 'author', 'created_at']
