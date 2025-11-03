@@ -2,7 +2,6 @@ from django.db import models
 from django.utils import timezone
 from auth_app import models as Auth_User 
 
-# Create your models here.
 class Board(models.Model):
     title = models.CharField(max_length=250)
     owner = models.ForeignKey(Auth_User.User,on_delete=models.CASCADE, related_name='owned_boards')
