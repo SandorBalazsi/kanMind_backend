@@ -2,6 +2,7 @@ from rest_framework import serializers
 from boards_app.models import Board, Task, Comment
 from auth_app.api.serializers import UserSerializer
 
+
 class BoardSerializer(serializers.ModelSerializer):
     owner_id = serializers.IntegerField(source='owner.id', read_only=True)
     members = UserSerializer(many=True, read_only=True)
@@ -24,7 +25,6 @@ class BoardSerializer(serializers.ModelSerializer):
         ]
 
     def get_tasks(self, obj):
-        from boards_app.api.serializers import TaskSerializer
         return TaskSerializer(obj.tasks.all(), many=True).data
     
     def create(self, validated_data):
@@ -67,3 +67,4 @@ class CommentSerializer(serializers.ModelSerializer):
         model = Comment
         fields = ['id', 'task', 'author', 'content', 'created_at']
         read_only_fields = ['id', 'task', 'author', 'created_at']
+
