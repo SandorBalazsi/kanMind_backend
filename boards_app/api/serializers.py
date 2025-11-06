@@ -57,7 +57,7 @@ class TaskSerializer(serializers.ModelSerializer):
             'assignee', 'assignee_id', 'reviewer', 'reviewer_id',
             'due_date', 'comments_count', 'created_at', 'updated_at'
         ]
-        read_only_fields = ['id', 'created_at', 'updated_at']
+        read_only_fields = ['id', 'board', 'created_at', 'updated_at']
 
 
 class CommentSerializer(serializers.ModelSerializer):
