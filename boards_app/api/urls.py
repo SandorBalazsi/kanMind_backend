@@ -4,6 +4,8 @@ from . import views
 
 router = DefaultRouter()
 router.register(r'', views.BoardViewSet, basename='board')
+router.register(r'', views.TaskViewSet, basename='task')
+router.register(r'comments', views.CommentViewSet, basename='comment')
 
 urlpatterns = [
     path('', include(router.urls)),

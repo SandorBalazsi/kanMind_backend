@@ -2,9 +2,9 @@ from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from django.db import models
-from boards_app.models import Board
-from .serializers import BoardSerializer
-from .permissions import IsBoardOwnerOrMember
+from boards_app.models import Board, Task, Comment
+from .serializers import BoardSerializer, TaskSerializer, CommentSerializer
+from .permissions import IsBoardOwnerOrMember, IsTaskBoardMember
 
 class BoardViewSet(viewsets.ModelViewSet):
     serializer_class = BoardSerializer
@@ -67,3 +67,66 @@ class BoardViewSet(viewsets.ModelViewSet):
                 {'error': 'User not found'},
                 status=status.HTTP_404_NOT_FOUND
             )
+
+
+class TaskViewSet(viewsets.ModelViewSet):
+    serializer_class = TaskSerializer
+    permission_classes = [IsTaskBoardMember]
+    
+    def get_queryset(self):
+        from models import Board
+        from django.db.models import Q
+        
+        accessible_boards = Board.objects.filter(
+            Q(owner=self.request.user) | Q(members=self.request.user)
+        ).distinct()
+        
+        return Task.objects.filter(board__in=accessible_boards)
+    
+    @action(detail=False, methods=['get'])
+    def assigned(self, request):
+        """Get tasks assigned to current user"""
+        tasks = self.get_queryset().filter(assignee=request.user)
+        serializer = self.get_serializer(tasks, many=True)
+        return Response(serializer.data)
+    
+    @action(detail=False, methods=['get'])
+    def reviewer(self, request):
+        """Get tasks where current user is reviewer"""
+        tasks = self.get_queryset().filter(reviewer=request.user)
+        serializer = self.get_serializer(tasks, many=True)
+        return Response(serializer.data)
+    
+    @action(detail=True, methods=['get', 'post'])
+    def comments(self, request, pk=None):
+        task = self.get_object()
+        
+        if request.method == 'GET':
+            comments = task.comments.all()
+            serializer = CommentSerializer(comments, many=True)
+            return Response(serializer.data)
+        
+        elif request.method == 'POST':
+            serializer = CommentSerializer(data=request.data)
+            if serializer.is_valid():
+                serializer.save(task=task, author=request.user)
+                return Response(serializer.data, status=status.HTTP_201_CREATED)
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+class CommentViewSet(viewsets.ModelViewSet):
+    serializer_class = CommentSerializer
+    permission_classes = [IsTaskBoardMember]
+    
+    def get_queryset(self):
+        from models import Board
+        from django.db.models import Q
+        
+        accessible_boards = Board.objects.filter(
+            Q(owner=self.request.user) | Q(members=self.request.user)
+        ).distinct()
+        
+        return Comment.objects.filter(task__board__in=accessible_boards)
+    
+    def perform_create(self, serializer):
+        serializer.save(author=self.request.user)
