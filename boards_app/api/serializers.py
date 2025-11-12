@@ -27,17 +27,17 @@ class BoardSerializer(serializers.ModelSerializer):
     def get_tasks(self, obj):
         return TaskSerializer(obj.tasks.all(), many=True).data
     
-    def create(self, validated_data):
-        member_ids = validated_data.pop('member_ids', [])
-        board = Board.objects.create(**validated_data)
+    def create(self, ted_data):
+        member_ids = ted_data.pop('member_ids', [])
+        board = Board.objects.create(**ted_data)
         if member_ids:
             board.members.set(member_ids)
         board.members.add(board.owner)
         return board
     
-    def update(self, instance, validated_data):
-        member_ids = validated_data.pop('member_ids', None)
-        instance = super().update(instance, validated_data)
+    def update(self, instance, ted_data):
+        member_ids = ted_data.pop('member_ids', None)
+        instance = super().update(instance, ted_data)
         if member_ids is not None:
             instance.members.set(member_ids)
             instance.members.add(instance.owner)

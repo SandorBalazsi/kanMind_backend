@@ -63,7 +63,6 @@ class TaskViewSet(viewsets.ModelViewSet):
     permission_classes = [IsTaskBoardMember]
 
     def get_queryset(self):
-        """Return tasks filtered by board_id (if in URL) and user's access rights."""
         from django.db.models import Q
 
         accessible_boards = Board.objects.filter(
@@ -72,7 +71,6 @@ class TaskViewSet(viewsets.ModelViewSet):
 
         queryset = Task.objects.filter(board__in=accessible_boards)
 
-        # filter tasks belonging to a specific board if board_id in URL
         board_id = self.kwargs.get('board_id')
         if board_id:
             queryset = queryset.filter(board_id=board_id)
