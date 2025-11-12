@@ -49,6 +49,7 @@ class TaskSerializer(serializers.ModelSerializer):
     reviewer = UserSerializer(read_only=True)
     assignee_id = serializers.IntegerField(write_only=True, required=False, allow_null=True)
     reviewer_id = serializers.IntegerField(write_only=True, required=False, allow_null=True)
+    board = serializers.IntegerField(write_only=True, required=False)
     
     class Meta:
         model = Task

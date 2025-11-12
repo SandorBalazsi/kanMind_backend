@@ -1,10 +1,12 @@
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
+from rest_framework.exceptions import ValidationError
 from django.db import models
 from boards_app.models import Board, Task, Comment
 from .serializers import BoardSerializer, TaskSerializer, CommentSerializer
 from .permissions import IsBoardOwnerOrMember, IsTaskBoardMember
+
 
 
 # --- BOARDS ---
@@ -78,13 +80,19 @@ class TaskViewSet(viewsets.ModelViewSet):
         return queryset
 
     def perform_create(self, serializer):
-        board_id = self.kwargs.get('board_id')
+        board_id = self.request.data.get('board')
+        print("DEBUG board_id:", board_id)
+
+        if not board_id:
+            raise ValidationError({'error': 'board is required.'})
+
         try:
             board = Board.objects.get(id=board_id)
         except Board.DoesNotExist:
-            raise serializer.ValidationError({'error': 'Board not found.'})
+            raise ValidationError({'error': 'Board not found.'})
 
         serializer.save(board=board)
+
 
     @action(detail=False, methods=['get'])
     def assigned(self, request, board_id=None):
@@ -116,6 +124,15 @@ class TaskViewSet(viewsets.ModelViewSet):
                 serializer.save(task=task, author=request.user)
                 return Response(serializer.data, status=status.HTTP_201_CREATED)
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        
+    @action(detail=False, methods=['post'], url_path='boards/tasks')
+    def create_task_with_board_in_body(self, request):
+
+        serializer = self.get_serializer(data=request.data)
+        if serializer.is_valid():
+            self.perform_create(serializer)
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
 # --- COMMENTS ---

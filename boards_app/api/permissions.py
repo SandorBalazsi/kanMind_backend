@@ -20,6 +20,7 @@ class IsBoardOwner(permissions.BasePermission):
         # Write permissions only for owner
         return obj.owner == request.user
     
+    
 class IsTaskBoardMember(permissions.BasePermission):
 
     def has_permission(self, request, view):
@@ -31,7 +32,7 @@ class IsTaskBoardMember(permissions.BasePermission):
         return board.owner == request.user or request.user in board.members.all()
 
 
-    
+
 class IsTaskAssignee(permissions.BasePermission):
 
     def has_object_permission(self, request, view, obj):

@@ -4,7 +4,7 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from django.contrib.auth import login, logout
-from django.views.decorators.csrf import csrf_exempt
+from rest_framework.authtoken.models import Token
 from .serializers import RegisterSerializer, LoginSerializer, UserSerializer
 from auth_app.models import User
 
@@ -16,16 +16,15 @@ def register_view(request):
     serializer = RegisterSerializer(data=request.data)
     
     if serializer.is_valid():
-        # Create the user
         user = serializer.save()
+
+        token = Token.objects.get(user=user)
         
-        # Automatically login the user
-        login(request, user)
-        
-        # Return user data
         return Response({
-            'user': UserSerializer(user).data,
-            'message': 'Registration successful'
+            'token': token.key,
+            'fullname': user.fullname,
+            'email': user.email,
+            'user_id': user.id
         }, status=status.HTTP_201_CREATED)
     
     # Return errors if validation failed
@@ -43,13 +42,17 @@ def login_view(request):
     
     if serializer.is_valid():
         user = serializer.validated_data['user']
+
+        token, created = Token.objects.get_or_create(user=user)
         
         login(request, user)
 
         return Response({
-            'user': UserSerializer(user).data,
-            'message': 'Login successful'
-        })
+            'token': token.key,
+            'fullname': user.fullname,
+            'email': user.email,
+            'user_id': user.id
+        }, status=status.HTTP_200_OK)
     
     # Return errors if validation failed
     return Response(
@@ -63,6 +66,7 @@ def login_view(request):
 def logout_view(request):
 
     logout(request)
+    request.user.auth_token.delete()
     return Response({
         'message': 'Logout successful'
     })
@@ -75,27 +79,28 @@ def current_user_view(request):
     return Response(UserSerializer(request.user).data)
 
 
-@api_view(['POST'])
+@api_view(['GET'])
 @permission_classes([AllowAny])
 def check_email_view(request):
-    """
-    Check if email exists (for your frontend)
-    POST /api/auth/check-email/
-    Body: {"email": "..."}
-    """
-    email = request.data.get('email')
+    email = request.query_params.get('email')
     
     if not email:
         return Response(
-            {'error': 'Email is required'},
+            {'error': 'Email parameter is required'},
             status=status.HTTP_400_BAD_REQUEST
         )
     
     try:
         user = User.objects.get(email=email)
-        return Response(UserSerializer(user).data)
+
+        return Response({
+            'id': user.id,
+            'email': user.email,
+            'fullname': user.fullname
+        }, status=status.HTTP_200_OK)
     except User.DoesNotExist:
+
         return Response(
-            {'error': 'User not found'},
+            {'error': 'Email not found'},
             status=status.HTTP_404_NOT_FOUND
         )
