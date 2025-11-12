@@ -14,6 +14,6 @@ jobs:
         server: sandor-balazsi.developerakademie.net
         username: ${{ secrets.FTP_USERRNAME }}
         password: ${{ secrets.FTP_PASSWORD }}
-        local-dir: ./backend/
+        local-dir: ./
         server-dir: ./kanmind_backend/
         dry-run: true
