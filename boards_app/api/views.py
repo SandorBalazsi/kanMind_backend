@@ -13,6 +13,7 @@ from .permissions import IsBoardOwnerOrMember, IsTaskBoardMember
 class BoardViewSet(viewsets.ModelViewSet):
     serializer_class = BoardSerializer
     permission_classes = [IsBoardOwnerOrMember]
+    lookup_url_kwarg = 'board_id'
 
     def get_queryset(self):
         return Board.objects.filter(
@@ -61,6 +62,7 @@ class BoardViewSet(viewsets.ModelViewSet):
 class TaskViewSet(viewsets.ModelViewSet):
     serializer_class = TaskSerializer
     permission_classes = [IsTaskBoardMember]
+    lookup_url_kwarg = 'task_id'
 
     def get_queryset(self):
         from django.db.models import Q
@@ -70,10 +72,6 @@ class TaskViewSet(viewsets.ModelViewSet):
         ).distinct()
 
         queryset = Task.objects.filter(board__in=accessible_boards)
-
-        board_id = self.kwargs.get('board_id')
-        if board_id:
-            queryset = queryset.filter(board_id=board_id)
 
         return queryset
 
@@ -92,22 +90,22 @@ class TaskViewSet(viewsets.ModelViewSet):
         serializer.save(board=board)
 
 
-    @action(detail=False, methods=['get'])
-    def assigned(self, request, board_id=None):
-        """Get tasks assigned to current user."""
+    @action(detail=False, methods=['get'], url_path='assigned-to-me')
+    def assigned_to_me(self, request):
+        """GET /api/tasks/assigned-to-me/"""
         tasks = self.get_queryset().filter(assignee=request.user)
         serializer = self.get_serializer(tasks, many=True)
         return Response(serializer.data)
 
-    @action(detail=False, methods=['get'])
-    def reviewer(self, request, board_id=None):
-        """Get tasks where current user is reviewer."""
+    @action(detail=False, methods=['get'], url_path='reviewing')
+    def reviewing(self, request):
+        """GET /api/tasks/reviewing/"""
         tasks = self.get_queryset().filter(reviewer=request.user)
         serializer = self.get_serializer(tasks, many=True)
         return Response(serializer.data)
 
     @action(detail=True, methods=['get', 'post'])
-    def comments(self, request, board_id=None, pk=None):
+    def comments(self, request, task_id=None, pk=None):
         """GET or POST comments for a task."""
         task = self.get_object()
 
@@ -137,24 +135,20 @@ class TaskViewSet(viewsets.ModelViewSet):
 class CommentViewSet(viewsets.ModelViewSet):
     serializer_class = CommentSerializer
     permission_classes = [IsTaskBoardMember]
-
+    
     def get_queryset(self):
-        """Return comments only for accessible boards and optionally filter by task_id."""
         from django.db.models import Q
-
+        
         accessible_boards = Board.objects.filter(
             Q(owner=self.request.user) | Q(members=self.request.user)
         ).distinct()
-
-        queryset = Comment.objects.filter(task__board__in=accessible_boards)
-
+        
         task_id = self.kwargs.get('task_id')
-        if task_id:
-            queryset = queryset.filter(task_id=task_id)
-
-        return queryset
-
+        return Comment.objects.filter(
+            task__board__in=accessible_boards,
+            task_id=task_id
+        )
+    
     def perform_create(self, serializer):
-        """Attach comment to correct task."""
         task_id = self.kwargs.get('task_id')
         serializer.save(author=self.request.user, task_id=task_id)

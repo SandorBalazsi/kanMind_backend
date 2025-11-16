@@ -49,12 +49,13 @@ class TaskSerializer(serializers.ModelSerializer):
     reviewer = UserSerializer(read_only=True)
     assignee_id = serializers.IntegerField(write_only=True, required=False, allow_null=True)
     reviewer_id = serializers.IntegerField(write_only=True, required=False, allow_null=True)
-    board = serializers.IntegerField(write_only=True, required=False)
+    board = serializers.IntegerField(write_only=True, required=True)
+    board_id = serializers.IntegerField(source='board.id', read_only=True)
     
     class Meta:
         model = Task
         fields = [
-            'id', 'board', 'title', 'description', 'status', 'priority',
+            'id', 'board', 'board_id', 'title', 'description', 'status', 'priority',
             'assignee', 'assignee_id', 'reviewer', 'reviewer_id',
             'due_date', 'comments_count', 'created_at', 'updated_at'
         ]
