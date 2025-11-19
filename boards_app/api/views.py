@@ -4,24 +4,88 @@ from rest_framework.response import Response
 from rest_framework.exceptions import ValidationError
 from django.db import models
 from boards_app.models import Board, Task, Comment
-from .serializers import BoardSerializer, TaskSerializer, CommentSerializer
+from .serializers import BoardSerializer,BoardListSerializer, BoardUpdateResponseSerializer, BoardUpdateSerializer, TaskSerializer, CommentSerializer
 from .permissions import IsBoardOwnerOrMember, IsTaskBoardMember
 
 
 
 # --- BOARDS ---
 class BoardViewSet(viewsets.ModelViewSet):
-    serializer_class = BoardSerializer
+    serializer_class = BoardSerializer, BoardListSerializer
     permission_classes = [IsBoardOwnerOrMember]
     lookup_url_kwarg = 'board_id'
 
+    def get_serializer_class(self):
+        if self.action == 'list':
+            return BoardListSerializer
+        return BoardSerializer
+    
+    def create(self, request, *args, **kwargs):
+        try:
+            serializer = self.get_serializer(data=request.data)
+            serializer.is_valid(raise_exception=True)
+            self.perform_create(serializer)
+
+            board = serializer.instance
+            response_serializer = BoardListSerializer(board)
+        
+            return Response(
+                response_serializer.data,
+                status=status.HTTP_201_CREATED
+            )
+        
+        except ValidationError as e:
+        
+            return Response(
+                {
+                    'error': 'Invalid request data',
+                    'details': e.detail
+                },
+                status=status.HTTP_400_BAD_REQUEST
+            )
+    
+        except Exception as e:
+        
+            return Response(
+                {
+                    'error': 'Internal Server Error',
+                    'details': str(e)
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+    
     def get_queryset(self):
-        return Board.objects.filter(
-            models.Q(owner=self.request.user) | models.Q(members=self.request.user)
-        ).distinct()
+        queryset = Board.objects.filter(members=self.request.user)
+        
+        if self.action == 'list':
+
+            queryset = queryset.prefetch_related('members', 'tasks')
+        else:
+
+            queryset = queryset.prefetch_related(
+                'members',
+                'tasks__assignee',
+                'tasks__reviewer'
+            )
+        
+        return queryset
 
     def perform_create(self, serializer):
-        serializer.save(owner=self.request.user)
+        board = serializer.save(owner=self.request.user)
+        board.members.add(self.request.user)
+
+    def partial_update(self, request, *args, **kwargs):
+        instance = self.get_object()
+        serializer = BoardUpdateSerializer(
+            instance,
+            data=request.data,
+            partial=True
+        )
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+
+        response_serializer = BoardUpdateResponseSerializer(instance)
+        return Response(response_serializer.data)
 
     @action(detail=True, methods=['post'])
     def add_member(self, request, pk=None):
@@ -72,22 +136,35 @@ class TaskViewSet(viewsets.ModelViewSet):
         ).distinct()
 
         queryset = Task.objects.filter(board__in=accessible_boards)
+        queryset = queryset.select_related('board', 'assignee', 'reviewer').prefetch_related('comments')
 
         return queryset
 
     def perform_create(self, serializer):
-        board_id = self.request.data.get('board')
-        print("DEBUG board_id:", board_id)
+        board_id = self.request.data.get('board_id')
 
         if not board_id:
-            raise ValidationError({'error': 'board is required.'})
+            raise ValidationError({'board_id': 'board_id is required.'})
 
         try:
-            board = Board.objects.get(id=board_id)
+            board = Board.objects.get(
+                id=board_id,
+                members=self.request.user
+            )
         except Board.DoesNotExist:
-            raise ValidationError({'error': 'Board not found.'})
+            raise ValidationError({'board_id': 'Board not found or you do not have access to it.'})
 
-        serializer.save(board=board)
+        assignee_id = self.request.data.get('assignee_id')
+        reviewer_id = self.request.data.get('reviewer_id')
+        
+        task = serializer.save(board=board)
+        
+        if assignee_id:
+            task.assignee_id = assignee_id
+        if reviewer_id:
+            task.reviewer_id = reviewer_id
+        
+        task.save()
 
 
     @action(detail=False, methods=['get'], url_path='assigned-to-me')

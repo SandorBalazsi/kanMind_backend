@@ -6,7 +6,7 @@ from rest_framework.authtoken.models import Token
 class UserSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
-        fields = ['id', 'email', 'fullname', 'username']
+        fields = ['id', 'email', 'fullname']
         read_only_fields = ['id']
 
 class RegisterSerializer(serializers.ModelSerializer):
@@ -43,7 +43,7 @@ class LoginSerializer(serializers.Serializer):
         email = data.get('email')
         password = data.get('password')
         
-        user = authenticate(username=email, password=password)
+        user = authenticate(email=email, password=password)
         
         if not user:
             raise serializers.ValidationError(

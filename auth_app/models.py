@@ -6,7 +6,7 @@ class User(AbstractUser):
     fullname = models.CharField(max_length=250)
 
     USERNAME_FIELD = 'email'
-    REQUIRED_FIELDS = ['username', 'fullname']
+    REQUIRED_FIELDS = ['fullname']
     
     def __str__(self):
         return self.fullname
