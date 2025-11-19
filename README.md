@@ -130,16 +130,18 @@ The board endpoints are provided by `BoardViewSet` (see `boards_app/api/views.py
 
 ### Tasks (`/api/tasks/`)
 - `GET    /api/tasks/` - List tasks that belong to boards the user can access
-- `POST   /api/tasks/` - Create a task. Request body must include `board` (board id). Example:
+- `POST   /api/tasks/` - Create a task. Request body must include `board` (board id) and may include `assignee_id` / `reviewer_id`. Example request body:
 
    ```json
    {
-      "board": 1,
-      "title": "Implement login",
-      "description": "...",
-      "priority": "high",
-      "status": "to-do",
-      "assignee": 5
+     "board": 15,
+     "title": "Code-Review durchführen",
+     "description": "Den neuen PR für das Feature X überprüfen",
+     "status": "review",
+     "priority": "medium",
+     "assignee_id": 8,
+     "reviewer_id": 8,
+     "due_date": "2025-02-27"
    }
    ```
 
@@ -151,6 +153,12 @@ The board endpoints are provided by `BoardViewSet` (see `boards_app/api/views.py
 - `POST   /api/tasks/boards/tasks/` - (helper action) alternative create endpoint that accepts board id in the body (this action exists on the TaskViewSet as `boards/tasks`)
 
 Notes: Tasks are provided by `TaskViewSet` and registered on the router at `/api/tasks/` (see `boards_app/api/urls.py` and `boards_app/api/views.py`).
+
+Permission and error behaviour (important):
+
+- Boards: `GET /api/boards/{id}/` — returns `404 Not Found` if the board id does not exist. If the board exists but the authenticated user is not the owner or a member, the endpoint returns `403 Forbidden`.
+- Creating tasks: `POST /api/tasks/` — if the `board` id does not exist the API returns `404 Not Found`; if the board exists but the authenticated user is not a member/owner the API returns `403 Forbidden`.
+- Updating tasks: `PATCH /api/tasks/{id}/` — returns `404 Not Found` if the task id does not exist; if the task exists but the authenticated user is not the board owner/member, the API returns `403 Forbidden`.
 
 ### Comments (task-scoped)
 Comments are managed per-task. The following endpoints are implemented using `CommentViewSet` and explicit URL patterns in `boards_app/api/urls.py`:
@@ -184,10 +192,9 @@ Response (201 Created):
 ```json
 {
    "id": 7,
-   "content": "Please review the edge-case handling.",
-   "author": 3,
-   "task": 42,
-   "created_at": "2025-11-16T12:34:56Z"
+   "created_at": "2025-11-16T12:34:56Z",
+   "author": "Test User 1",
+   "content": "Please review the edge-case handling."
 }
 ```
 
