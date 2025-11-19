@@ -1,7 +1,7 @@
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
-from rest_framework.exceptions import ValidationError
+from rest_framework.exceptions import ValidationError, PermissionDenied, NotFound
 from django.db import models
 from boards_app.models import Board, Task, Comment
 from .serializers import BoardSerializer,BoardListSerializer, BoardUpdateResponseSerializer, BoardUpdateSerializer, TaskSerializer, CommentSerializer
@@ -126,51 +126,38 @@ class BoardViewSet(viewsets.ModelViewSet):
 class TaskViewSet(viewsets.ModelViewSet):
     serializer_class = TaskSerializer
     permission_classes = [IsTaskBoardMember]
+    
+    lookup_field = "id"
     lookup_url_kwarg = 'task_id'
 
     def get_queryset(self):
-        from django.db.models import Q
-
-        accessible_boards = Board.objects.filter(
-            Q(owner=self.request.user) | Q(members=self.request.user)
-        ).distinct()
-
-        queryset = Task.objects.filter(board__in=accessible_boards)
-        queryset = queryset.select_related('board', 'assignee', 'reviewer').prefetch_related('comments')
-
-        return queryset
+        return Task.objects.select_related(
+            'board', 'assignee', 'reviewer'
+        ).prefetch_related('comments')
+    
 
     def perform_create(self, serializer):
-        board_id = self.request.data.get('board_id')
+        serializer.save()
 
-        if not board_id:
-            raise ValidationError({'board_id': 'board_id is required.'})
-
+    def update(self, request, *args, **kwargs):
+        task_id = kwargs.get(self.lookup_url_kwarg)
+        
         try:
-            board = Board.objects.get(
-                id=board_id,
-                members=self.request.user
-            )
-        except Board.DoesNotExist:
-            raise ValidationError({'board_id': 'Board not found or you do not have access to it.'})
-
-        assignee_id = self.request.data.get('assignee_id')
-        reviewer_id = self.request.data.get('reviewer_id')
+            task = Task.objects.get(id=task_id)
+        except Task.DoesNotExist:
+            raise NotFound("Task not found.")
         
-        task = serializer.save(board=board)
+        # Check if user is owner or member of the task's board
+        board = task.board
+        if board.owner != request.user and request.user not in board.members.all():
+            raise PermissionDenied("You do not have permission to update this task.")
         
-        if assignee_id:
-            task.assignee_id = assignee_id
-        if reviewer_id:
-            task.reviewer_id = reviewer_id
-        
-        task.save()
-
-
+        return super().update(request, *args, **kwargs)
+    
     @action(detail=False, methods=['get'], url_path='assigned-to-me')
     def assigned_to_me(self, request):
         """GET /api/tasks/assigned-to-me/"""
-        tasks = self.get_queryset().filter(assignee=request.user)
+        tasks = self.get_queryset().filter(assignee_id=request.user.id)
         serializer = self.get_serializer(tasks, many=True)
         return Response(serializer.data)
 

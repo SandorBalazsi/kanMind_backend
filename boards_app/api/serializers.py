@@ -1,7 +1,9 @@
 from rest_framework import serializers
+from rest_framework.exceptions import PermissionDenied, NotFound
 from boards_app.models import Board, Task, Comment
 from auth_app.api.serializers import UserSerializer
 from auth_app.models import User
+
 
 
 class BoardSerializer(serializers.ModelSerializer):
@@ -100,8 +102,7 @@ class BoardUpdateResponseSerializer(serializers.ModelSerializer):
         fields = ['id', 'title', 'owner_data', 'members_data']
     
 class TaskSerializer(serializers.ModelSerializer):
-    board_id = serializers.SerializerMethodField(read_only=True)
-    board = serializers.IntegerField(write_only=True, required=True)
+    board = serializers.IntegerField(write_only=True)
     assignee = UserSerializer(read_only=True)
     reviewer = UserSerializer(read_only=True)
     assignee_id = serializers.IntegerField(write_only=True, required=False, allow_null=True)
@@ -113,7 +114,6 @@ class TaskSerializer(serializers.ModelSerializer):
         model = Task
         fields = [
             'id',
-            'board_id',
             'board',
             'title',
             'description',
@@ -126,32 +126,51 @@ class TaskSerializer(serializers.ModelSerializer):
             'due_date',
             'comments_count'
         ]
-        read_only_fields = ['id', 'board_id']
+        read_only_fields = ['id']
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         
         if self.context.get('nested_in_board'):
-            self.fields.pop('board_id', None)
             self.fields.pop('board', None)
     
     def get_comments_count(self, obj):
         return obj.comments.count()
     
+    def to_representation(self, instance):
+        representation = super().to_representation(instance)
+        board_val = instance.board.id if getattr(instance, 'board', None) else None
+        representation.pop('board', None)
+        new_rep = {}
+        for key, value in representation.items():
+            new_rep[key] = value
+            if key == 'id':
+                new_rep['board'] = board_val
+        return new_rep
+    
     def create(self, validated_data):
         board_id = validated_data.pop('board')
         assignee_id = validated_data.pop('assignee_id', None)
         reviewer_id = validated_data.pop('reviewer_id', None)
+    
+        user = self.context['request'].user
+    
+        try:
+            board = Board.objects.get(id=board_id)
+        except Board.DoesNotExist:
+            raise NotFound("Board not found.")
         
-        board = Board.objects.get(id=board_id)
-        task = Task.objects.create(board=board, **validated_data)
-        
-        if assignee_id:
-            task.assignee_id = assignee_id
-        if reviewer_id:
-            task.reviewer_id = reviewer_id
-        
-        task.save()
+
+        if board.owner != user and user not in board.members.all():
+            raise PermissionDenied("You do not have permission to create tasks on this board.")
+    
+        task = Task.objects.create(
+            board=board,
+            assignee_id=assignee_id,
+            reviewer_id=reviewer_id,
+            **validated_data
+        )
+    
         return task
 
 
@@ -160,6 +179,6 @@ class CommentSerializer(serializers.ModelSerializer):
     
     class Meta:
         model = Comment
-        fields = ['id', 'task', 'author', 'content', 'created_at']
-        read_only_fields = ['id', 'task', 'author', 'created_at']
+        fields = ['id', 'created_at', 'author', 'content']
+        read_only_fields = ['id', 'created_at', 'author']
 
