@@ -58,10 +58,8 @@ class BoardViewSet(viewsets.ModelViewSet):
         queryset = Board.objects.filter(members=self.request.user)
         
         if self.action == 'list':
-
             queryset = queryset.prefetch_related('members', 'tasks')
         else:
-
             queryset = queryset.prefetch_related(
                 'members',
                 'tasks__assignee',
@@ -69,6 +67,19 @@ class BoardViewSet(viewsets.ModelViewSet):
             )
         
         return queryset
+    
+    def get_object(self):
+        lookup_url_kwarg = self.lookup_url_kwarg or self.lookup_field
+        board_id = self.kwargs[lookup_url_kwarg]
+        
+        try:
+            obj = self.get_queryset().get(id=board_id)
+        except Board.DoesNotExist:
+            raise PermissionDenied("You do not have permission to access this board.")
+        
+        self.check_object_permissions(self.request, obj)
+        
+        return obj
 
     def perform_create(self, serializer):
         board = serializer.save(owner=self.request.user)
@@ -135,23 +146,25 @@ class TaskViewSet(viewsets.ModelViewSet):
             'board', 'assignee', 'reviewer'
         ).prefetch_related('comments')
     
+    def get_object(self):
+
+        lookup_url_kwarg = self.lookup_url_kwarg or self.lookup_field
+        task_id = self.kwargs[lookup_url_kwarg]
+        
+        try:
+            obj = self.get_queryset().get(id=task_id)
+        except Task.DoesNotExist:
+            raise PermissionDenied("You do not have permission to access this task.")
+        
+        self.check_object_permissions(self.request, obj)
+        
+        return obj
+    
 
     def perform_create(self, serializer):
         serializer.save()
 
     def update(self, request, *args, **kwargs):
-        task_id = kwargs.get(self.lookup_url_kwarg)
-        
-        try:
-            task = Task.objects.get(id=task_id)
-        except Task.DoesNotExist:
-            raise NotFound("Task not found.")
-        
-        # Check if user is owner or member of the task's board
-        board = task.board
-        if board.owner != request.user and request.user not in board.members.all():
-            raise PermissionDenied("You do not have permission to update this task.")
-        
         return super().update(request, *args, **kwargs)
     
     @action(detail=False, methods=['get'], url_path='assigned-to-me')
@@ -212,6 +225,40 @@ class CommentViewSet(viewsets.ModelViewSet):
             task__board__in=accessible_boards,
             task_id=task_id
         )
+    
+    def get_object(self):
+        comment_id = self.kwargs.get('pk')
+        task_id = self.kwargs.get('task_id')
+
+        try:
+            obj = self.get_queryset().get(id=comment_id, task_id=task_id)
+        except Comment.DoesNotExist:
+
+            raise PermissionDenied("You do not have permission to access this comment.")
+        
+        self.check_object_permissions(self.request, obj)
+        
+        return obj
+    
+    def list(self, request, *args, **kwargs):
+        task_id = self.kwargs.get('task_id')
+        
+        from django.db.models import Q
+        accessible_boards = Board.objects.filter(
+            Q(owner=request.user) | Q(members=request.user)
+        ).distinct()
+        
+        task_exists = Task.objects.filter(
+            id=task_id,
+            board__in=accessible_boards
+        ).exists()
+        
+        if not task_exists:
+            raise PermissionDenied("You do not have permission to access this task.")
+        
+        queryset = self.get_queryset()
+        serializer = self.get_serializer(queryset, many=True)
+        return Response(serializer.data)
     
     def perform_create(self, serializer):
         task_id = self.kwargs.get('task_id')

@@ -156,7 +156,8 @@ Notes: Tasks are provided by `TaskViewSet` and registered on the router at `/api
 
 Permission and error behaviour (important):
 
-- Boards: `GET /api/boards/{id}/` — returns `404 Not Found` if the board id does not exist. If the board exists but the authenticated user is not the owner or a member, the endpoint returns `403 Forbidden`.
+- Boards: `GET /api/boards/{id}/` — returns `403 Forbidden` when the authenticated user does not have access to the board. In the current implementation a missing or inaccessible board is reported as `403` rather than `404` for this endpoint.
+- Note: task creation and update endpoints differ: `POST /api/tasks/` will return `404 Not Found` if the referenced `board` id does not exist, and `403 Forbidden` if the board exists but the user is not a member/owner.
 - Creating tasks: `POST /api/tasks/` — if the `board` id does not exist the API returns `404 Not Found`; if the board exists but the authenticated user is not a member/owner the API returns `403 Forbidden`.
 - Updating tasks: `PATCH /api/tasks/{id}/` — returns `404 Not Found` if the task id does not exist; if the task exists but the authenticated user is not the board owner/member, the API returns `403 Forbidden`.
 
