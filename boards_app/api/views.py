@@ -1,16 +1,24 @@
+"""ViewSets for board, task, and comment API endpoints.
+
+Provides REST API endpoints for CRUD operations on boards, tasks, and comments
+with comprehensive permission and authentication checks.
+"""
+
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
-from rest_framework.exceptions import ValidationError, PermissionDenied, NotFound
-from django.db import models
+from rest_framework.exceptions import ValidationError, PermissionDenied, NotFound, NotAuthenticated
 from boards_app.models import Board, Task, Comment
 from .serializers import BoardSerializer,BoardListSerializer, BoardUpdateResponseSerializer, BoardUpdateSerializer, TaskSerializer, CommentSerializer
 from .permissions import IsBoardOwnerOrMember, IsTaskBoardMember
 
 
-
-# --- BOARDS ---
 class BoardViewSet(viewsets.ModelViewSet):
+    """ViewSet for board management.
+
+    Provides endpoints for creating, listing, retrieving, updating, and deleting boards.
+    Includes actions for adding and removing board members.
+    """
     serializer_class = BoardSerializer, BoardListSerializer
     permission_classes = [IsBoardOwnerOrMember]
     lookup_url_kwarg = 'board_id'
@@ -71,14 +79,25 @@ class BoardViewSet(viewsets.ModelViewSet):
     def get_object(self):
         lookup_url_kwarg = self.lookup_url_kwarg or self.lookup_field
         board_id = self.kwargs[lookup_url_kwarg]
-        
+        if not self.request.user or not self.request.user.is_authenticated:
+            raise NotAuthenticated(
+                "Not authenticated. The user must be logged in to access this resource."
+            )
+
         try:
-            obj = self.get_queryset().get(id=board_id)
+            obj = Board.objects.get(id=board_id)
         except Board.DoesNotExist:
-            raise PermissionDenied("You do not have permission to access this board.")
-        
-        self.check_object_permissions(self.request, obj)
-        
+            raise NotFound(
+                "Board not found. The specified board ID does not exist."
+            )
+
+        try:
+            self.check_object_permissions(self.request, obj)
+        except PermissionDenied:
+            raise PermissionDenied(
+                "Forbidden. The user must be either a member of the board or the owner of the board."
+            )
+
         return obj
 
     def perform_create(self, serializer):
@@ -133,8 +152,12 @@ class BoardViewSet(viewsets.ModelViewSet):
             return Response({'error': 'User not found'}, status=status.HTTP_404_NOT_FOUND)
 
 
-# --- TASKS ---
 class TaskViewSet(viewsets.ModelViewSet):
+    """ViewSet for task management.
+
+    Provides endpoints for creating, listing, retrieving, updating, and deleting tasks.
+    Includes custom actions for assigned tasks, reviewing tasks, and task comments.
+    """
     serializer_class = TaskSerializer
     permission_classes = [IsTaskBoardMember]
     
@@ -150,14 +173,25 @@ class TaskViewSet(viewsets.ModelViewSet):
 
         lookup_url_kwarg = self.lookup_url_kwarg or self.lookup_field
         task_id = self.kwargs[lookup_url_kwarg]
-        
+        if not self.request.user or not self.request.user.is_authenticated:
+            raise NotAuthenticated(
+                "Not authenticated. The user must be logged in to access this resource."
+            )
+
         try:
-            obj = self.get_queryset().get(id=task_id)
+            obj = Task.objects.get(id=task_id)
         except Task.DoesNotExist:
-            raise PermissionDenied("You do not have permission to access this task.")
-        
-        self.check_object_permissions(self.request, obj)
-        
+            raise NotFound(
+                "Task not found. The specified task ID does not exist."
+            )
+
+        try:
+            self.check_object_permissions(self.request, obj)
+        except PermissionDenied:
+            raise PermissionDenied(
+                "Forbidden. The user must be either a member of the board or the owner of the board."
+            )
+
         return obj
     
 
@@ -208,8 +242,12 @@ class TaskViewSet(viewsets.ModelViewSet):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
-# --- COMMENTS ---
 class CommentViewSet(viewsets.ModelViewSet):
+    """ViewSet for task comment management.
+
+    Provides endpoints for listing, creating, and deleting comments on tasks.
+    Only users with board access can view or create comments.
+    """
     serializer_class = CommentSerializer
     permission_classes = [IsTaskBoardMember]
     
@@ -229,37 +267,84 @@ class CommentViewSet(viewsets.ModelViewSet):
     def get_object(self):
         comment_id = self.kwargs.get('pk')
         task_id = self.kwargs.get('task_id')
+        if not self.request.user or not self.request.user.is_authenticated:
+            raise NotAuthenticated(
+                "Not authenticated. The user must be logged in to access this resource."
+            )
 
         try:
-            obj = self.get_queryset().get(id=comment_id, task_id=task_id)
-        except Comment.DoesNotExist:
+            task = Task.objects.get(id=task_id)
+        except Task.DoesNotExist:
+            raise NotFound(
+                "Task not found. The specified task ID does not exist."
+            )
 
-            raise PermissionDenied("You do not have permission to access this comment.")
-        
-        self.check_object_permissions(self.request, obj)
-        
+        board = task.board
+        user = self.request.user
+        if not (board.owner == user or board.members.filter(id=user.id).exists()):
+            raise PermissionDenied(
+                "Forbidden. The user must be either a member of the board or the owner of the board."
+            )
+
+        try:
+            obj = Comment.objects.get(id=comment_id, task_id=task_id)
+        except Comment.DoesNotExist:
+            raise NotFound(
+                "Comment not found. The specified comment ID does not exist."
+            )
+
+        try:
+            self.check_object_permissions(self.request, obj)
+        except PermissionDenied:
+            raise PermissionDenied(
+                "Forbidden. The user must be either a member of the board or the owner of the board."
+            )
+
         return obj
     
     def list(self, request, *args, **kwargs):
         task_id = self.kwargs.get('task_id')
-        
-        from django.db.models import Q
-        accessible_boards = Board.objects.filter(
-            Q(owner=request.user) | Q(members=request.user)
-        ).distinct()
-        
-        task_exists = Task.objects.filter(
-            id=task_id,
-            board__in=accessible_boards
-        ).exists()
-        
-        if not task_exists:
-            raise PermissionDenied("You do not have permission to access this task.")
-        
-        queryset = self.get_queryset()
+        if not request.user or not request.user.is_authenticated:
+            raise NotAuthenticated(
+                "Not authenticated. The user must be logged in to access this resource."
+            )
+
+        try:
+            task = Task.objects.get(id=task_id)
+        except Task.DoesNotExist:
+            raise NotFound(
+                "Task not found. The specified task ID does not exist."
+            )
+
+        board = task.board
+        if not (board.owner == request.user or board.members.filter(id=request.user.id).exists()):
+            raise PermissionDenied(
+                "Forbidden. The user must be either a member of the board or the owner of the board."
+            )
+
+        queryset = Comment.objects.filter(task_id=task_id)
         serializer = self.get_serializer(queryset, many=True)
         return Response(serializer.data)
     
     def perform_create(self, serializer):
+        if not self.request.user or not self.request.user.is_authenticated:
+            raise NotAuthenticated(
+                "Not authenticated. The user must be logged in to access this resource."
+            )
+
         task_id = self.kwargs.get('task_id')
+
+        try:
+            task = Task.objects.get(id=task_id)
+        except Task.DoesNotExist:
+            raise NotFound(
+                "Task not found. The specified task ID does not exist."
+            )
+
+        board = task.board
+        if not (board.owner == self.request.user or board.members.filter(id=self.request.user.id).exists()):
+            raise PermissionDenied(
+                "Forbidden. The user must be either a member of the board or the owner of the board."
+            )
+
         serializer.save(author=self.request.user, task_id=task_id)
