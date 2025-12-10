@@ -12,7 +12,11 @@ from auth_app.models import User
 @api_view(['POST'])
 @permission_classes([AllowAny])
 def register_view(request):
+    """Register a new user and return an authentication token.
 
+    Validates the registration payload and creates a new user using the
+    `RegisterSerializer`. On success returns token and basic user info.
+    """
     serializer = RegisterSerializer(data=request.data)
     
     if serializer.is_valid():
@@ -74,7 +78,7 @@ def login_view(request):
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def logout_view(request):
-
+    """Log out the authenticated user and delete their token."""
     logout(request)
     request.user.auth_token.delete()
     return Response({
@@ -85,12 +89,18 @@ def logout_view(request):
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def current_user_view(request):
+    """Return the currently authenticated user's public profile data."""
     return Response(UserSerializer(request.user).data)
 
 
 @api_view(['GET'])
 @permission_classes([AllowAny])
 def check_email_view(request):
+    """Check whether an email is registered and return the user basic info.
+
+    Expects an `email` query parameter and returns 200 with user info when
+    found, 400 when the parameter is missing, and 404 when not found.
+    """
     email = request.query_params.get('email')
     
     if not email:

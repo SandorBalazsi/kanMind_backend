@@ -39,11 +39,21 @@ class BoardSerializer(serializers.ModelSerializer):
         ).data
     
     def to_representation(self, instance):
+        """Return representation with members expanded to full user objects.
+
+        This replaces the default members PK list with serialized user objects
+        for the board detail response.
+        """
         representation = super().to_representation(instance)
         representation['members'] = UserSerializer(instance.members.all(), many=True).data
         return representation
     
     def create(self, validated_data):
+        """Create a board, set provided members and ensure owner is a member.
+
+        The caller must pass an `owner` when saving via the viewset; this
+        method ensures the owner is always included in the members M2M.
+        """
         members = validated_data.pop('members', [])
         board = Board.objects.create(**validated_data)
         board.members.set(members)
@@ -51,6 +61,11 @@ class BoardSerializer(serializers.ModelSerializer):
         return board
     
     def update(self, instance, validated_data):
+        """Update board fields and replace members if provided.
+
+        When `members` is present in the payload, replace the membership set
+        and keep the owner in the members list.
+        """
         members = validated_data.pop('members', None)
         instance = super().update(instance, validated_data)
         if members is not None:
@@ -137,6 +152,11 @@ class TaskSerializer(serializers.ModelSerializer):
         read_only_fields = ['id']
 
     def __init__(self, *args, **kwargs):
+        """Remove `board` input when serializer is used nested inside a board.
+
+        The `nested_in_board` context flag is set by `BoardSerializer.get_tasks`
+        to avoid requiring the board id for nested task representations.
+        """
         super().__init__(*args, **kwargs)
         
         if self.context.get('nested_in_board'):
@@ -146,6 +166,12 @@ class TaskSerializer(serializers.ModelSerializer):
         return obj.comments.count()
     
     def to_representation(self, instance):
+        """Reorder representation so `board` appears immediately after `id`.
+
+        The serializer stores `board` as a write-only input; for responses we
+        inject the board id into the serialized mapping right after the `id`
+        key for the API's expected field ordering.
+        """
         representation = super().to_representation(instance)
         board_val = instance.board.id if getattr(instance, 'board', None) else None
         representation.pop('board', None)
@@ -157,6 +183,12 @@ class TaskSerializer(serializers.ModelSerializer):
         return new_rep
     
     def create(self, validated_data):
+        """Create a Task in the specified board after validating access.
+
+        Expects `board` in validated_data (an integer id). Raises `NotFound`
+        if the board does not exist and `PermissionDenied` if the request user
+        is not the board owner or a member.
+        """
         board_id = validated_data.pop('board')
         assignee_id = validated_data.pop('assignee_id', None)
         reviewer_id = validated_data.pop('reviewer_id', None)
