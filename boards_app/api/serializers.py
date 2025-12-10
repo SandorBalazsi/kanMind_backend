@@ -15,10 +15,6 @@ from auth_app.models import User
 
 
 class BoardSerializer(serializers.ModelSerializer):
-    """Detailed board serializer with full member and task information.
-
-    Used for board detail views, including all members (as user objects) and tasks.
-    """
     owner_id = serializers.IntegerField(source='owner.id', read_only=True)
     members = serializers.PrimaryKeyRelatedField(
         many=True,
@@ -64,11 +60,6 @@ class BoardSerializer(serializers.ModelSerializer):
     
 
 class BoardListSerializer(serializers.ModelSerializer):
-    """Lightweight board serializer for list views.
-
-    Includes aggregate counts (members, tasks, to-do, high priority) for efficient
-    display in list endpoints.
-    """
     owner_id = serializers.IntegerField(source='owner.id', read_only=True)
     member_count = serializers.SerializerMethodField()
     ticket_count = serializers.SerializerMethodField()
@@ -100,10 +91,6 @@ class BoardListSerializer(serializers.ModelSerializer):
         return obj.tasks.filter(priority='high').count()
     
 class BoardUpdateSerializer(serializers.ModelSerializer):
-    """Serializer for updating board title and members.
-
-    Allows partial updates to board title and member list.
-    """
     members = serializers.PrimaryKeyRelatedField(
         many=True,
         queryset=User.objects.all(),
@@ -115,10 +102,6 @@ class BoardUpdateSerializer(serializers.ModelSerializer):
         fields = ['title', 'members']
     
 class BoardUpdateResponseSerializer(serializers.ModelSerializer):
-    """Serializer for board update response with full owner and member details.
-
-    Returns updated board data with owner and members as full user objects.
-    """
     owner_data = UserSerializer(source='owner', read_only=True)
     members_data = UserSerializer(source='members', many=True, read_only=True)
 
@@ -127,11 +110,6 @@ class BoardUpdateResponseSerializer(serializers.ModelSerializer):
         fields = ['id', 'title', 'owner_data', 'members_data']
     
 class TaskSerializer(serializers.ModelSerializer):
-    """Serializer for task creation, update, and retrieval.
-
-    Handles task validation, board membership checks, and supports nested
-    representation within boards. Includes assignee and reviewer details.
-    """
     board = serializers.IntegerField(write_only=True)
     assignee = UserSerializer(read_only=True)
     reviewer = UserSerializer(read_only=True)
@@ -209,11 +187,6 @@ class TaskSerializer(serializers.ModelSerializer):
 
 
 class CommentSerializer(serializers.ModelSerializer):
-    """Serializer for task comments.
-
-    Provides comment creation and retrieval with author information.
-    Author is read-only and automatically set to the request user.
-    """
     author = serializers.CharField(source='author.fullname', read_only=True)
     
     class Meta:

@@ -1,9 +1,3 @@
-"""Views for user authentication endpoints.
-
-Provides API endpoints for user registration, login, logout, and user information retrieval.
-All views handle authentication token generation and validation.
-"""
-
 from django.shortcuts import render
 from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes
@@ -18,18 +12,6 @@ from auth_app.models import User
 @api_view(['POST'])
 @permission_classes([AllowAny])
 def register_view(request):
-    """Handle user registration.
-
-    Accepts POST requests with email, fullname, password, and repeated_password.
-    Creates a new user and returns an authentication token upon successful registration.
-
-    Args:
-        request: HTTP request containing user registration data.
-
-    Returns:
-        Response: 201 CREATED with token, fullname, email, and user_id on success.
-        Response: 400 BAD REQUEST with validation errors on failure.
-    """
 
     serializer = RegisterSerializer(data=request.data)
     
@@ -45,7 +27,6 @@ def register_view(request):
             'user_id': user.id
         }, status=status.HTTP_201_CREATED)
     
-    # Return errors if validation failed
     return Response(
         serializer.errors,
         status=status.HTTP_400_BAD_REQUEST
@@ -84,7 +65,6 @@ def login_view(request):
             'user_id': user.id
         }, status=status.HTTP_200_OK)
     
-    # Return errors if validation failed
     return Response(
         serializer.errors,
         status=status.HTTP_400_BAD_REQUEST
@@ -94,16 +74,6 @@ def login_view(request):
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def logout_view(request):
-    """Handle user logout.
-
-    Logs out the authenticated user and deletes their authentication token.
-
-    Args:
-        request: HTTP request from an authenticated user.
-
-    Returns:
-        Response: 200 OK with logout success message.
-    """
 
     logout(request)
     request.user.auth_token.delete()
@@ -115,36 +85,12 @@ def logout_view(request):
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def current_user_view(request):
-    """Retrieve current authenticated user information.
-
-    Returns the profile data for the authenticated user making the request.
-
-    Args:
-        request: HTTP request from an authenticated user.
-
-    Returns:
-        Response: 200 OK with user data (id, email, fullname).
-    """
-
     return Response(UserSerializer(request.user).data)
 
 
 @api_view(['GET'])
 @permission_classes([AllowAny])
 def check_email_view(request):
-    """Check if an email address exists in the system.
-
-    Accepts GET requests with an 'email' query parameter.
-    Returns user data if found, or a 404 error if not found.
-
-    Args:
-        request: HTTP request with 'email' query parameter.
-
-    Returns:
-        Response: 200 OK with user data (id, email, fullname) if email exists.
-        Response: 400 BAD REQUEST if email parameter is missing.
-        Response: 404 NOT FOUND if email does not exist.
-    """
     email = request.query_params.get('email')
     
     if not email:

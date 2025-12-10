@@ -15,11 +15,6 @@ from .permissions import IsBoardOwnerOrMember, IsTaskBoardMember
 
 
 class BoardViewSet(viewsets.ModelViewSet):
-    """ViewSet for board management.
-
-    Provides endpoints for creating, listing, retrieving, updating, and deleting boards.
-    Includes actions for adding and removing board members.
-    """
     serializer_class = BoardSerializer, BoardListSerializer
     permission_classes = [IsBoardOwnerOrMember]
     lookup_url_kwarg = 'board_id'
@@ -143,11 +138,6 @@ class BoardViewSet(viewsets.ModelViewSet):
 
 
 class TaskViewSet(viewsets.ModelViewSet):
-    """ViewSet for task management.
-
-    Provides endpoints for creating, listing, retrieving, updating, and deleting tasks.
-    Includes custom actions for assigned tasks, reviewing tasks, and task comments.
-    """
     serializer_class = TaskSerializer
     permission_classes = [IsTaskBoardMember]
     
@@ -221,11 +211,6 @@ class TaskViewSet(viewsets.ModelViewSet):
 
 
 class CommentViewSet(viewsets.ModelViewSet):
-    """ViewSet for task comment management.
-
-    Provides endpoints for listing, creating, and deleting comments on tasks.
-    Only users with board access can view or create comments.
-    """
     serializer_class = CommentSerializer
     permission_classes = [IsTaskBoardMember]
     
