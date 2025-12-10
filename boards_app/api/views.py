@@ -256,10 +256,18 @@ class CommentViewSet(viewsets.ModelViewSet):
     permission_classes = [IsTaskBoardMember]
     
     def get_queryset(self):
-        from django.db.models import Q
+        """
+        Retrieve comments for a specific task, ensuring the user has access to the board.
 
-        # Only return comments attached to tasks that belong to boards the
-        # requesting user can access (owner or member).
+        This method filters comments based on:
+        1. The task ID from the URL parameters
+        2. Boards that the user owns or is a member of
+
+        Returns:
+            QuerySet: A distinct queryset of Comment objects that belong to the specified task
+                      and are associated with boards accessible to the current user.
+        """
+        from django.db.models import Q
         accessible_boards = Board.objects.filter(
             Q(owner=self.request.user) | Q(members=self.request.user)
         ).distinct()
